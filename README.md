@@ -47,7 +47,7 @@ aws-platform/
 │
 ├── ansible/
 │   ├── ansible.cfg
-│   ├── playbook.yml                # main entry point
+│   ├── playbook.yml                # main entry point for project
 │   ├── inventory/
 │   │   └── hosts.ini               # auto-built by GitHub Actions
 │   ├── group_vars/
