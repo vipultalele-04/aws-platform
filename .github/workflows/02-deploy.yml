@@ -221,8 +221,6 @@ jobs:
             echo "Smoke test WARNING: got ${STATUS} (ALB may still be warming up)"
             echo "Smoke test status: ${STATUS}" >> $GITHUB_STEP_SUMMARY
           fi
-
-  # ── JOB 4: Notify ──────────────────────────────────────────────
   notify:
     name: "Job 4 · Notify"
     runs-on: ubuntu-latest
@@ -230,21 +228,31 @@ jobs:
     if: always()
 
     steps:
+      - name: Deployment summary
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Terraform | ${{ needs.terraform-apply.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Ansible   | ${{ needs.ansible-configure.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke test| ${{ needs.smoke-test.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ALB DNS   | ${{ needs.terraform-apply.outputs.external_alb_dns }} |" >> $GITHUB_STEP_SUMMARY
+
       - name: Slack notification
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
         uses: slackapi/slack-github-action@v1.26.0
         with:
           payload: |
             {
-              "text": "${{ needs.smoke-test.result == 'success' && '✅' || '⚠️' }} Deploy *${{ needs.smoke-test.result }}* — ${{ github.repository }}",
+              "text": "${{ needs.smoke-test.result == 'success' && '✅' || '⚠️' }} Deploy ${{ needs.smoke-test.result }} — ${{ github.repository }}",
               "blocks": [{
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*Deploy Results*\n• Terraform: ${{ needs.terraform-apply.result }}\n• Ansible: ${{ needs.ansible-configure.result }}\n• Smoke test: ${{ needs.smoke-test.result }}\n• External ALB: `${{ needs.terraform-apply.outputs.external_alb_dns }}`\n• By: ${{ github.actor }} on `${{ github.ref_name }}`"
+                  "text": "Deploy Results\n• Terraform: ${{ needs.terraform-apply.result }}\n• Ansible: ${{ needs.ansible-configure.result }}\n• Smoke test: ${{ needs.smoke-test.result }}\n• External ALB: ${{ needs.terraform-apply.outputs.external_alb_dns }}\n• By: ${{ github.actor }} on ${{ github.ref_name }}"
                 }
               }]
             }
         env:
           SLACK_WEBHOOK_URL:  ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        continue-on-error: true
