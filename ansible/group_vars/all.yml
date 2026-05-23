@@ -1,0 +1,6 @@
+---
+aws_region:                "us-east-1"
+app_port:                  8080
+health_check_path:         "/health"
+cloudwatch_log_prefix:     "/aws/ec2"
+ansible_python_interpreter: /usr/bin/python3

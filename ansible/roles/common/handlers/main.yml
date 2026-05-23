@@ -1,0 +1,24 @@
+---
+- name: Restart sshd
+  service:
+    name: sshd
+    state: restarted
+
+- name: Restart cloudwatch agent
+  service:
+    name: amazon-cloudwatch-agent
+    state: restarted
+
+- name: Reload nginx
+  service:
+    name: nginx
+    state: reloaded
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Restart appserver
+  service:
+    name: appserver
+    state: restarted

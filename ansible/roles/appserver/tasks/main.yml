@@ -1,0 +1,104 @@
+---
+# ── appserver role: private EC2 — app server :8080 ────────────────
+
+- name: Install Java 17
+  yum:
+    name: java-17-amazon-corretto-headless
+    state: present
+
+- name: Install MySQL client
+  yum:
+    name: mysql
+    state: present
+
+- name: Create app user
+  user:
+    name: appuser
+    system: true
+    shell: /sbin/nologin
+    home: /opt/app
+    create_home: true
+
+- name: Create app directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: appuser
+    group: appuser
+    mode: '0755'
+  loop:
+    - /opt/app
+    - /opt/app/config
+    - /var/log/app
+
+- name: Write application config
+  copy:
+    dest: /opt/app/config/application.properties
+    owner: appuser
+    group: appuser
+    mode: '0640'
+    content: |
+      server.port=8080
+      server.address=0.0.0.0
+      spring.datasource.url=jdbc:mysql://{{ rds_endpoint }}/appdb
+      spring.datasource.username=admin
+      logging.file.path=/var/log/app
+
+- name: Write Python health-check app (replace with your real app)
+  copy:
+    dest: /opt/app/server.py
+    owner: appuser
+    mode: '0755'
+    content: |
+      #!/usr/bin/env python3
+      from http.server import HTTPServer, BaseHTTPRequestHandler
+      import json, socket
+      class H(BaseHTTPRequestHandler):
+          def do_GET(self):
+              body = json.dumps({"status":"healthy","host":socket.gethostname()}).encode()
+              self.send_response(200)
+              self.send_header('Content-Type','application/json')
+              self.end_headers()
+              self.wfile.write(body)
+          def log_message(self, *a): pass
+      HTTPServer(('',8080),H).serve_forever()
+
+- name: Create systemd service
+  copy:
+    dest: /etc/systemd/system/appserver.service
+    content: |
+      [Unit]
+      Description=App Server
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=appuser
+      WorkingDirectory=/opt/app
+      ExecStart=/usr/bin/python3 /opt/app/server.py
+      Restart=on-failure
+      RestartSec=5s
+      StandardOutput=journal
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reload systemd
+
+- name: Enable and start app server
+  systemd:
+    name: appserver
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Test MySQL connection to RDS
+  command: >
+    mysql -h {{ rds_endpoint }} -P 3306 -u admin
+    -e "SELECT 1;" --connect-timeout=10
+  register: db_test
+  changed_when: false
+  failed_when: false
+
+- name: RDS connection result
+  debug:
+    msg: "RDS: {{ 'connected' if db_test.rc == 0 else 'failed — check credentials' }}"

@@ -1,0 +1,58 @@
+---
+# ── webserver role: public EC2 — nginx reverse proxy ──────────────
+
+- name: Install nginx
+  command:
+    cmd: amazon-linux-extras install nginx1 -y
+  args:
+    creates: /usr/sbin/nginx
+
+- name: Remove default nginx config
+  file:
+    path: /etc/nginx/conf.d/default.conf
+    state: absent
+
+- name: Write nginx reverse proxy config
+  copy:
+    dest: /etc/nginx/conf.d/proxy.conf
+    content: |
+      upstream internal_alb {
+          server {{ internal_alb_dns }}:80;
+          keepalive 32;
+      }
+
+      server {
+          listen 80;
+          server_name _;
+
+          access_log /var/log/nginx/access.log;
+          error_log  /var/log/nginx/error.log;
+
+          location /health {
+              access_log off;
+              return 200 'OK';
+              add_header Content-Type text/plain;
+          }
+
+          location / {
+              proxy_pass         http://internal_alb;
+              proxy_http_version 1.1;
+              proxy_set_header   Host              $host;
+              proxy_set_header   X-Real-IP         $remote_addr;
+              proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+              proxy_set_header   Connection        "";
+              proxy_connect_timeout 10s;
+              proxy_read_timeout    60s;
+          }
+      }
+  notify: Reload nginx
+
+- name: Validate nginx config
+  command: nginx -t
+  changed_when: false
+
+- name: Start and enable nginx
+  service:
+    name: nginx
+    state: started
+    enabled: true

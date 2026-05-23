@@ -1,0 +1,42 @@
+---
+# ══════════════════════════════════════════════════════════════════
+# MAIN PLAYBOOK
+# Play 1 → public EC2s  (nginx reverse proxy + CloudWatch)
+# Play 2 → private EC2s (app server :8080 + CloudWatch)
+# ══════════════════════════════════════════════════════════════════
+
+- name: Configure public EC2 instances
+  hosts: public_ec2
+  become: true
+
+  roles:
+    - common
+    - webserver
+
+  post_tasks:
+    - name: Verify nginx is running
+      service:
+        name: nginx
+        state: started
+      register: result
+    - name: nginx status
+      debug:
+        msg: "nginx is {{ result.state }} on {{ inventory_hostname }}"
+
+- name: Configure private EC2 instances
+  hosts: private_ec2
+  become: true
+
+  roles:
+    - common
+    - appserver
+
+  post_tasks:
+    - name: Verify app server is listening on 8080
+      wait_for:
+        port: 8080
+        timeout: 30
+      delegate_to: localhost
+    - name: App server status
+      debug:
+        msg: "App server running on {{ inventory_hostname }}:8080"
